@@ -1,0 +1,14 @@
+# Storage and local SQLite database
+storage/*.sqlite
+storage/*.sqlite-shm
+storage/*.sqlite-wal
+storage/.app_key
+!storage/.htaccess
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs and environment
+*.log
+.env

@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SheetGate | Instant Google Sheets API & MCP Server</title>
+  <meta name="description" content="Turn any Google Sheet into a fast, cached, read-only JSON REST API and Model Context Protocol (MCP) server for AI agents.">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%2232%22%20height=%2232%22><rect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%233b82f6%22/><text y=%2222%22 x=%227%22 font-family=%22sans-serif%22 font-weight=%22bold%22 font-size=%2220%22 fill=%22white%22>SG</text></svg>">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div style="display: flex; align-items: center; gap: 2rem;">
+        <a href="#endpoints" class="brand" onclick="app.navigate('endpoints')">
+          <div class="brand-icon">⚡</div>
+          <div style="display: flex; align-items: baseline;">
+            <span class="brand-title">SheetGate</span>
+            <span class="brand-badge">v1.0</span>
+          </div>
+        </a>
+
+        <nav class="nav-links" id="mainNav">
+          <button class="nav-item active" data-view="endpoints" onclick="app.navigate('endpoints')">
+            <span>📊</span> Endpoints
+          </button>
+          <button class="nav-item" data-view="playground" onclick="app.navigate('playground')">
+            <span>⚡</span> Playground
+          </button>
+          <button class="nav-item" data-view="mcp" onclick="app.navigate('mcp')">
+            <span>🤖</span> MCP Server
+          </button>
+          <button class="nav-item" data-view="drift" onclick="app.navigate('drift')">
+            <span>🛡️</span> Schema Drift
+          </button>
+          <button class="nav-item" data-view="logs" onclick="app.navigate('logs')">
+            <span>📜</span> Logs & Stats
+          </button>
+          <button class="nav-item" data-view="settings" onclick="app.navigate('settings')">
+            <span>⚙️</span> Settings
+          </button>
+        </nav>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn btn-primary btn-sm" onclick="app.openCreateModal()">
+          <span>+</span> New Endpoint
+        </button>
+        <button class="btn btn-secondary btn-sm" id="logoutBtn" onclick="app.logout()" style="display: none;">
+          Logout
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Wrapper -->
+  <main class="main-wrapper">
+
+    <!-- View: Endpoints -->
+    <section id="view-endpoints" class="view-section">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Google Sheet Endpoints</h1>
+          <p class="section-desc">Cached, read-only REST APIs and MCP endpoints connected to your sheets.</p>
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="app.openCreateModal()">
+            <span>+</span> Connect New Sheet
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Metrics -->
+      <div class="stats-grid">
+        <div class="stat-card" style="--stat-accent: #3b82f6;">
+          <div class="stat-label">Active Endpoints</div>
+          <div class="stat-value" id="statEndpointCount">0</div>
+          <div class="stat-sub">Live cached APIs</div>
+        </div>
+        <div class="stat-card" style="--stat-accent: #10b981;">
+          <div class="stat-label">Total Cached Rows</div>
+          <div class="stat-value" id="statRowCount">0</div>
+          <div class="stat-sub">Across all endpoints</div>
+        </div>
+        <div class="stat-card" style="--stat-accent: #06b6d4;">
+          <div class="stat-label">Cache Hit Ratio</div>
+          <div class="stat-value" id="statHitRatio">100%</div>
+          <div class="stat-sub">SWR cached queries</div>
+        </div>
+        <div class="stat-card" style="--stat-accent: #f43f5e;">
+          <div class="stat-label">Drift Alerts</div>
+          <div class="stat-value" id="statDriftCount">0</div>
+          <div class="stat-sub">Schema changes detected</div>
+        </div>
+      </div>
+
+      <!-- Endpoints Grid -->
+      <div class="endpoints-grid" id="endpointsList">
+        <div style="grid-column: 1 / -1; text-align: center; padding: 4rem 1rem; color: var(--text-muted);">
+          Loading your SheetGate endpoints...
+        </div>
+      </div>
+    </section>
+
+    <!-- View: Playground -->
+    <section id="view-playground" class="view-section" style="display: none;">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Query Playground</h1>
+          <p class="section-desc">Interactive filter builder, full-text search, aggregation tester, and snippet generator.</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <select id="playgroundEndpointSelect" class="form-select" style="min-width: 240px;" onchange="app.playground.onEndpointChange()">
+            <option value="">Select an endpoint...</option>
+          </select>
+          <button class="btn btn-primary" onclick="app.playground.runQuery()">
+            <span>▶</span> Run Query
+          </button>
+        </div>
+      </div>
+
+      <div class="playground-layout">
+        <!-- Query Controls Panel -->
+        <div class="panel">
+          <div class="panel-header">Query Parameters</div>
+          <div class="panel-body">
+            <div class="form-group">
+              <label class="form-label">Full-Text Search</label>
+              <input type="text" id="pgSearch" class="form-input" placeholder="Search across all columns..." onkeyup="if(event.key==='Enter') app.playground.runQuery()">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" style="display: flex; justify-content: space-between;">
+                <span>Filters</span>
+                <a href="javascript:void(0)" onclick="app.playground.addFilterRow()" style="color: var(--primary); font-size: 0.75rem; text-decoration: none;">+ Add Filter</a>
+              </label>
+              <div id="pgFiltersContainer" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <!-- Filter rows injected here -->
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Sort Column</label>
+                <input type="text" id="pgSort" class="form-input" placeholder="e.g. price or date">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Order</label>
+                <select id="pgOrder" class="form-select">
+                  <option value="asc">Ascending (ASC)</option>
+                  <option value="desc">Descending (DESC)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Limit</label>
+                <input type="number" id="pgLimit" class="form-input" value="25" min="1" max="1000">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Offset</label>
+                <input type="number" id="pgOffset" class="form-input" value="0" min="0">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Fields (Comma separated)</label>
+              <input type="text" id="pgFields" class="form-input" placeholder="e.g. id, title, price, status">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Aggregates</label>
+              <input type="text" id="pgAggregates" class="form-input" placeholder="e.g. count, sum:amount, avg:rating">
+              <div class="form-help">Supported: count, sum:col, avg:col, min:col, max:col</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Group By Column</label>
+              <input type="text" id="pgGroupBy" class="form-input" placeholder="e.g. category or status">
+            </div>
+
+            <div class="form-group" id="pgApiKeyGroup" style="display: none;">
+              <label class="form-label">API Key (Protected Endpoint)</label>
+              <input type="text" id="pgApiKey" class="form-input" placeholder="sg_live_...">
+            </div>
+          </div>
+        </div>
+
+        <!-- Query Output & Snippets Panel -->
+        <div class="panel">
+          <div class="tab-row">
+            <button class="tab-btn active" onclick="app.playground.switchTab('response', this)">JSON Response</button>
+            <button class="tab-btn" onclick="app.playground.switchTab('table', this)">Table View</button>
+            <button class="tab-btn" onclick="app.playground.switchTab('curl', this)">cURL</button>
+            <button class="tab-btn" onclick="app.playground.switchTab('js', this)">JavaScript</button>
+            <button class="tab-btn" onclick="app.playground.switchTab('python', this)">Python</button>
+          </div>
+
+          <div class="panel-body" style="padding: 1rem;">
+            <!-- URL Bar -->
+            <div class="endpoint-url-box" style="margin-bottom: 1rem;">
+              <span style="color: var(--text-muted); font-size: 0.75rem;">GET</span>
+              <span id="pgActiveUrl" class="endpoint-url-text">Select an endpoint to start</span>
+              <button class="btn btn-secondary btn-sm" onclick="app.copyToClipboard(document.getElementById('pgActiveUrl').innerText)">Copy URL</button>
+            </div>
+
+            <!-- Response Tab -->
+            <div id="pgTabResponse">
+              <div class="code-container">
+                <div class="code-header">
+                  <span id="pgResponseStatus">Status: Ready</span>
+                  <button class="btn btn-secondary btn-sm" onclick="app.copyToClipboard(document.getElementById('pgJsonOutput').innerText)">Copy JSON</button>
+                </div>
+                <pre id="pgJsonOutput" class="code-pre">// Click "Run Query" above to fetch live data</pre>
+              </div>
+            </div>
+
+            <!-- Table View Tab -->
+            <div id="pgTabTable" style="display: none;">
+              <div class="data-table-container">
+                <table class="data-table" id="pgDataTable">
+                  <thead><tr><th>Select endpoint and query to view table</th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- cURL Tab -->
+            <div id="pgTabCurl" style="display: none;">
+              <div class="code-container">
+                <div class="code-header">
+                  <span>Bash / Terminal</span>
+                  <button class="btn btn-secondary btn-sm" onclick="app.copyToClipboard(document.getElementById('pgCurlOutput').innerText)">Copy</button>
+                </div>
+                <pre id="pgCurlOutput" class="code-pre"></pre>
+              </div>
+            </div>
+
+            <!-- JS Tab -->
+            <div id="pgTabJs" style="display: none;">
+              <div class="code-container">
+                <div class="code-header">
+                  <span>Fetch API (Browser / Node)</span>
+                  <button class="btn btn-secondary btn-sm" onclick="app.copyToClipboard(document.getElementById('pgJsOutput').innerText)">Copy</button>
+                </div>
+                <pre id="pgJsOutput" class="code-pre"></pre>
+              </div>
+            </div>
+
+            <!-- Python Tab -->
+            <div id="pgTabPython" style="display: none;">
+              <div class="code-container">
+                <div class="code-header">
+                  <span>Python (requests)</span>
+                  <button class="btn btn-secondary btn-sm" onclick="app.copyToClipboard(document.getElementById('pgPythonOutput').innerText)">Copy</button>
+                </div>
+                <pre id="pgPythonOutput" class="code-pre"></pre>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View: MCP Server -->
+    <section id="view-mcp" class="view-section" style="display: none;">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Model Context Protocol (MCP) Server</h1>
+          <p class="section-desc">Connect AI agents like Claude Desktop and Cursor directly to your Google Sheets with read-only tools.</p>
+        </div>
+        <div>
+          <select id="mcpEndpointSelect" class="form-select" style="min-width: 240px;" onchange="app.mcpView.onEndpointChange()">
+            <option value="">Select an endpoint...</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Claude Desktop Config -->
+        <div class="panel">
+          <div class="panel-header">
+            <span>Claude Desktop Config (claude_desktop_config.json)</span>
+            <button class="btn btn-secondary btn-sm" onclick="app.copyToClipboard(document.getElementById('mcpClaudeCode').innerText)">Copy Config</button>
+          </div>
+          <div class="panel-body">
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+              Add this to your <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>:
+            </p>
+            <div class="code-container">
+              <pre id="mcpClaudeCode" class="code-pre"></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cursor Config -->
+        <div class="panel">
+          <div class="panel-header">
+            <span>Cursor AI (.cursor/mcp.json)</span>
+            <button class="btn btn-secondary btn-sm" onclick="app.copyToClipboard(document.getElementById('mcpCursorCode').innerText)">Copy Config</button>
+          </div>
+          <div class="panel-body">
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+              Add as an HTTP MCP Server in Cursor Settings &gt; Features &gt; MCP:
+            </p>
+            <div class="code-container">
+              <pre id="mcpCursorCode" class="code-pre"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Available Tools Reference -->
+      <div class="panel">
+        <div class="panel-header">Available Read-Only MCP Tools</div>
+        <div class="panel-body">
+          <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border-left: 3px solid #3b82f6;">
+              <div style="font-weight: 700; font-family: var(--font-mono); font-size: 0.95rem; color: #60a5fa;">1. list_tabs</div>
+              <div style="font-size: 0.825rem; color: var(--text-secondary); margin: 0.35rem 0;">Lists all available tabs and worksheets in the target Google Sheet.</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">Params: none</div>
+            </div>
+
+            <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border-left: 3px solid #10b981;">
+              <div style="font-weight: 700; font-family: var(--font-mono); font-size: 0.95rem; color: #34d399;">2. get_schema</div>
+              <div style="font-size: 0.825rem; color: var(--text-secondary); margin: 0.35rem 0;">Returns column headers, auto-detected types (number, boolean, date, text), total row count, and top 3 sample rows.</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">Params: { include_samples: boolean }</div>
+            </div>
+
+            <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border-left: 3px solid #06b6d4;">
+              <div style="font-weight: 700; font-family: var(--font-mono); font-size: 0.95rem; color: #22d3ee;">3. query_rows</div>
+              <div style="font-size: 0.825rem; color: var(--text-secondary); margin: 0.35rem 0;">Executes high-performance filtering, full-text search, sorting, limit/offset pagination, column projection, and aggregations (count, sum, avg, min, max, group_by).</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">Params: { search, filters, sort, order, limit, offset, fields, aggregate, group_by }</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View: Schema Drift -->
+    <section id="view-drift" class="view-section" style="display: none;">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Schema Drift Protection</h1>
+          <p class="section-desc">Monitors column renaming, additions, deletions, and type shifts across your Google Sheets.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">Recent Schema Drift Logs</div>
+        <div class="panel-body">
+          <div class="data-table-container">
+            <table class="data-table" id="driftLogsTable">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Endpoint</th>
+                  <th>Drift Event</th>
+                  <th>Details</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="driftLogsBody">
+                <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No schema drift detected. All endpoints match their baseline snapshots.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View: Request Logs -->
+    <section id="view-logs" class="view-section" style="display: none;">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">API Request Logs</h1>
+          <p class="section-desc">Real-time audit log of queries, cache hit status, latency, and status codes.</p>
+        </div>
+        <div>
+          <button class="btn btn-secondary btn-sm" onclick="app.logsView.refresh()">Refresh Logs</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">Recent Traffic (Last 50 Requests)</div>
+        <div class="panel-body">
+          <div class="data-table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Endpoint</th>
+                  <th>Method</th>
+                  <th>Status</th>
+                  <th>Cache Status</th>
+                  <th>Duration</th>
+                  <th>Client IP</th>
+                </tr>
+              </thead>
+              <tbody id="requestLogsBody">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No request logs recorded yet. Query an endpoint to see traffic.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View: Settings -->
+    <section id="view-settings" class="view-section" style="display: none;">
+      <div class="section-header">
+        <div>
+          <h1 class="section-title">Settings & Google OAuth</h1>
+          <p class="section-desc">Configure Google OAuth client for private sheets, admin credentials, and system settings.</p>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+        <!-- Google OAuth Credentials Panel -->
+        <div class="panel">
+          <div class="panel-header">Google OAuth 2.0 Client (For Private Sheets)</div>
+          <div class="panel-body">
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+              Create an OAuth 2.0 Client ID in the <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color: var(--primary);">Google Cloud Console</a> with the <code>https://www.googleapis.com/auth/spreadsheets.readonly</code> scope.
+            </p>
+
+            <form id="googleOauthForm" onsubmit="app.settingsView.saveOauthConfig(event)">
+              <div class="form-group">
+                <label class="form-label">Client ID</label>
+                <input type="text" id="gClientId" class="form-input" placeholder="e.g. 12345...apps.googleusercontent.com">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Client Secret</label>
+                <input type="password" id="gClientSecret" class="form-input" placeholder="Leave empty to keep existing">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Authorized Redirect URI</label>
+                <div class="endpoint-url-box" style="margin-bottom: 0;">
+                  <span id="gRedirectUri" class="endpoint-url-text">Loading...</span>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="app.copyToClipboard(document.getElementById('gRedirectUri').innerText)">Copy</button>
+                </div>
+                <div class="form-help">Add this exact URL to "Authorized redirect URIs" in Google Cloud Console.</div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Google Picker API Key (Optional)</label>
+                <input type="text" id="gApiKey" class="form-input" placeholder="Optional browser API key for Google Picker file selector">
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem;">Save Google Credentials</button>
+            </form>
+
+            <hr style="border: none; border-top: 1px solid var(--border-subtle); margin: 1.5rem 0;">
+
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 0.875rem; font-weight: 600;">Connect Google Account</div>
+                <div style="font-size: 0.775rem; color: var(--text-secondary);">Authorizes SheetGate to read your restricted sheets.</div>
+              </div>
+              <button class="btn btn-secondary" onclick="app.settingsView.startGoogleOAuth()">
+                <span>🔑</span> Connect Google
+              </button>
+            </div>
+
+            <div id="connectedAccountsList" style="margin-top: 1rem;">
+              <!-- Connected accounts list -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin Password Panel -->
+        <div class="panel">
+          <div class="panel-header">Security & Admin Password</div>
+          <div class="panel-body">
+            <form onsubmit="app.settingsView.updatePassword(event)">
+              <div class="form-group">
+                <label class="form-label">New Admin Password</label>
+                <input type="password" id="newAdminPassword" class="form-input" placeholder="At least 6 characters" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Confirm Password</label>
+                <input type="password" id="confirmAdminPassword" class="form-input" placeholder="Confirm password" required>
+              </div>
+              <button type="submit" class="btn btn-primary">Update Password</button>
+            </form>
+
+            <hr style="border: none; border-top: 1px solid var(--border-subtle); margin: 1.5rem 0;">
+
+            <div class="form-group">
+              <label class="form-label">Background Cron URL</label>
+              <div class="endpoint-url-box">
+                <span id="cronUrlText" class="endpoint-url-text">Loading...</span>
+                <button class="btn btn-secondary btn-sm" onclick="app.copyToClipboard(document.getElementById('cronUrlText').innerText)">Copy</button>
+              </div>
+              <div class="form-help">Trigger via HTTP cron or run <code>php bin/cron.php</code> on your server.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Create Endpoint Modal -->
+  <div class="modal-backdrop" id="createModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">Connect New Google Sheet</h2>
+        <button class="btn btn-secondary btn-sm" onclick="app.closeModal('createModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="createEndpointForm" onsubmit="app.submitCreateEndpoint(event)">
+          <!-- Source Selector -->
+          <div class="form-group">
+            <label class="form-label">Sheet Type</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+              <label style="border: 1px solid var(--border-strong); padding: 0.75rem; border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; background: var(--bg-surface-elevated);">
+                <input type="radio" name="source_type" value="public_url" checked onchange="app.toggleSourceType(this.value)">
+                <div>
+                  <div style="font-weight: 600; font-size: 0.85rem;">Public Sheet URL</div>
+                  <div style="font-size: 0.7rem; color: var(--text-muted);">Anyone with link can view</div>
+                </div>
+              </label>
+
+              <label style="border: 1px solid var(--border-subtle); padding: 0.75rem; border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center; gap: 0.5rem; background: var(--bg-surface-elevated);">
+                <input type="radio" name="source_type" value="google_oauth" onchange="app.toggleSourceType(this.value)">
+                <div>
+                  <div style="font-weight: 600; font-size: 0.85rem;">Restricted / OAuth</div>
+                  <div style="font-size: 0.7rem; color: var(--text-muted);">Private sheet via Google login</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Public URL Input -->
+          <div class="form-group" id="publicUrlGroup">
+            <label class="form-label">Google Sheets URL</label>
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="url" id="epSheetUrl" class="form-input" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0">
+              <button type="button" class="btn btn-secondary" onclick="app.testSheetUrl()">Test</button>
+            </div>
+            <div class="form-help">Ensure General Access in Google Sheets is set to "Anyone with the link can view".</div>
+          </div>
+
+          <!-- Test Preview Box -->
+          <div id="testPreviewBox" style="display: none; margin-bottom: 1.25rem; padding: 0.85rem; background: var(--bg-surface-elevated); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+              <span style="color: var(--success); font-weight: 700; font-size: 0.8rem;">✓ Valid Sheet Detected</span>
+              <span id="previewRowCount" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
+            </div>
+            <div id="previewColumnsChips" style="display: flex; flex-wrap: wrap; gap: 0.35rem;"></div>
+          </div>
+
+          <!-- OAuth Sheet Inputs -->
+          <div id="oauthSheetGroup" style="display: none;">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Spreadsheet ID</label>
+                <input type="text" id="epSpreadsheetId" class="form-input" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Tab Name / Range</label>
+                <input type="text" id="epSheetName" class="form-input" placeholder="Sheet1 (or Customers)">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Endpoint Name</label>
+              <input type="text" id="epName" class="form-input" placeholder="e.g. Products Catalog" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Custom Slug / ID (Optional)</label>
+              <input type="text" id="epId" class="form-input" placeholder="e.g. products (auto-generated if empty)">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Description (Optional)</label>
+            <input type="text" id="epDescription" class="form-input" placeholder="Brief summary of what this sheet contains">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Cache TTL (Seconds)</label>
+              <input type="number" id="epTtl" class="form-input" value="300" min="30">
+              <div class="form-help">Default 300s (5m), minimum 30s.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Visibility</label>
+              <select id="epVisibility" class="form-select">
+                <option value="public">Public (Keyless)</option>
+                <option value="protected">Protected (Requires Bearer API Key)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Rate Limit (Requests / Min)</label>
+              <input type="number" id="epRateLimit" class="form-input" value="60" min="0">
+              <div class="form-help">0 = unlimited.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Allowed CORS Origins</label>
+              <input type="text" id="epCors" class="form-input" value="*">
+              <div class="form-help">* for all, or comma separated domains.</div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="toggle-switch">
+              <input type="checkbox" id="epSchemaLocked" class="toggle-input">
+              <div class="toggle-slider"></div>
+              <div>
+                <div style="font-weight: 600; font-size: 0.85rem;">Lock Column Schema</div>
+                <div style="font-size: 0.725rem; color: var(--text-muted);">Return HTTP 409 error if sheet columns change unexpectedly.</div>
+              </div>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Webhook URL (Optional)</label>
+            <input type="url" id="epWebhook" class="form-input" placeholder="https://your-app.com/webhooks/sheet-drift">
+            <div class="form-help">Notified via POST JSON when columns are added, removed, or renamed.</div>
+          </div>
+
+          <div class="modal-footer" style="padding-left: 0; padding-right: 0; margin-bottom: -1.5rem;">
+            <button type="button" class="btn btn-secondary" onclick="app.closeModal('createModal')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Endpoint</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- API Key Generated Modal -->
+  <div class="modal-backdrop" id="apiKeyModal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 class="modal-title">API Key Generated</h2>
+        <button class="btn btn-secondary btn-sm" onclick="app.closeModal('apiKeyModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 0.85rem; margin-bottom: 1.25rem;">
+          <div style="color: #fbbf24; font-weight: 700; font-size: 0.85rem;">⚠️ Copy your API key now</div>
+          <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.2rem;">
+            This key is hashed with SHA-256 and will never be shown again.
+          </div>
+        </div>
+
+        <div class="endpoint-url-box" style="padding: 0.75rem;">
+          <span id="newApiKeyText" class="endpoint-url-text" style="font-size: 0.85rem; color: #fff;"></span>
+          <button class="btn btn-primary btn-sm" onclick="app.copyToClipboard(document.getElementById('newApiKeyText').innerText)">Copy Key</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="app.closeModal('apiKeyModal')">I've Saved It</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Auth Login / Setup Modal -->
+  <div class="modal-backdrop" id="authModal">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h2 class="modal-title" id="authModalTitle">Admin Login</h2>
+      </div>
+      <div class="modal-body">
+        <p id="authModalDesc" style="font-size: 0.825rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+          Enter your admin password to access SheetGate.
+        </p>
+        <form onsubmit="app.handleAuthSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" id="authPasswordInput" class="form-input" placeholder="Enter password" required autofocus>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="authSubmitBtn">
+            Login
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="/assets/js/app.js"></script>
+</body>
+</html>

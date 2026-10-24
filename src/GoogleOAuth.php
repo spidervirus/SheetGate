@@ -125,7 +125,7 @@ class GoogleOAuth
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        unset($ch);
 
         $data = json_decode((string)$response, true);
         if ($httpCode !== 200 || empty($data['access_token'])) {
@@ -214,7 +214,7 @@ class GoogleOAuth
         ]);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        unset($ch);
 
         $refreshed = json_decode((string)$response, true);
         if ($httpCode !== 200 || empty($refreshed['access_token'])) {
@@ -263,7 +263,7 @@ class GoogleOAuth
             CURLOPT_TIMEOUT => 10,
         ]);
         $res = curl_exec($ch);
-        curl_close($ch);
+        unset($ch);
 
         $data = json_decode((string)$res, true);
         return $data['email'] ?? 'Google Account';

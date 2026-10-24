@@ -267,7 +267,7 @@ class Fetcher
         $rawRows = [];
 
         // Read first non-empty row as header
-        while (($row = fgetcsv($stream)) !== false) {
+        while (($row = fgetcsv($stream, null, ',', '"', '\\')) !== false) {
             // Check if all fields are empty
             if (empty(array_filter($row, fn($v) => trim((string)$v) !== ''))) {
                 continue;
@@ -288,7 +288,7 @@ class Fetcher
 
         // Read remaining rows
         $headerCount = count($headers);
-        while (($row = fgetcsv($stream)) !== false) {
+        while (($row = fgetcsv($stream, null, ',', '"', '\\')) !== false) {
             if (empty(array_filter($row, fn($v) => trim((string)$v) !== ''))) {
                 continue; // Skip entirely empty rows
             }
@@ -341,7 +341,7 @@ class Fetcher
 
             // Replace spaces and special characters with underscores, or keep friendly
             $clean = preg_replace('/[^\p{L}\p{N}_-]/u', '_', $clean);
-            $clean = trim($clean, '_');
+            $clean = strtolower(trim($clean, '_'));
             if ($clean === '') {
                 $clean = 'column_' . ($index + 1);
             }
@@ -349,12 +349,12 @@ class Fetcher
             // Deduplicate column names
             $base = $clean;
             $count = 1;
-            while (isset($seen[strtolower($clean)])) {
+            while (isset($seen[$clean])) {
                 $clean = "{$base}_{$count}";
                 $count++;
             }
 
-            $seen[strtolower($clean)] = true;
+            $seen[$clean] = true;
             $headers[] = $clean;
         }
 
@@ -522,7 +522,7 @@ class Fetcher
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $effectiveUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
         $curlError = curl_error($ch);
-        curl_close($ch);
+        unset($ch);
 
         if ($curlError) {
             throw new \RuntimeException("cURL error: {$curlError}");
