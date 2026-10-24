@@ -48,7 +48,7 @@ Built with **modern vanilla PHP 8.2+ and SQLite via PDO**, SheetGate requires **
 
 ### 2. Clone and Run
 ```bash
-git clone https://github.com/sheetgate/sheetgate.git
+git clone https://github.com/spidervirus/sheetgate.git
 cd sheetgate
 
 # Start PHP built-in web server
@@ -216,6 +216,10 @@ In Cursor, go to **Settings > Features > MCP**, click **Add New MCP Server**:
 | `default_rate_limit` | `SHEETGATE_RATE_LIMIT` | `60` | Requests allowed per minute per IP |
 | `google.client_id` | `GOOGLE_CLIENT_ID` | `""` | Google Cloud OAuth Client ID |
 | `google.client_secret` | `GOOGLE_CLIENT_SECRET` | `""` | Google Cloud OAuth Client Secret |
+
+## Security
+
+For vulnerability disclosures and details on our defense-in-depth architecture (SSRF validation, Libsodium encryption, SHA-256 API key hashing, prepared statements), please see our [Security Policy](SECURITY.md).
 
 ---
 
